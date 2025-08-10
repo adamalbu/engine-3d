@@ -1,0 +1,11 @@
+use common::{Axis, MAT4_IDENTITY, deg_to_rad};
+use glam::Vec4;
+
+mod common;
+mod model_space_to_world_space;
+
+fn main() {
+    let model_point = Vec4::new(2.0, 1.0, 0.0, 1.0);
+    let rx = model_space_to_world_space::calculate_rotation_matrix(deg_to_rad(45.0), Axis::Y);
+    println!("{}", rx);
+}
