@@ -19,15 +19,11 @@ const VERTEX_DATA: &[Vertex] = &[
         position: [-0.5, -0.5, 0.0],
     },
     Vertex {
-        position: [0.5, 0.5, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.0],
-    },
-    Vertex {
         position: [-0.5, 0.5, 1.0],
     },
 ];
+
+const INDEX_DATA: &[u16] = &[0, 1, 2, 0, 2, 3];
 
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
@@ -94,6 +90,7 @@ pub struct State {
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
     window: Arc<Window>,
 }
 
@@ -159,6 +156,12 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDEX_DATA),
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -167,6 +170,7 @@ impl State {
             is_surface_configured: false,
             render_pipeline,
             vertex_buffer,
+            index_buffer,
             window,
         })
     }
@@ -216,7 +220,8 @@ impl State {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..6, 0..1);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..6, 0, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
