@@ -1,5 +1,5 @@
 use std::sync::Arc;
-
+use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
     event::*,
@@ -8,8 +8,36 @@ use winit::{
     window::Window,
 };
 
-fn new_render_pipeline_with_shader(
+const VERTEX_DATA: &[Vertex] = &[
+    Vertex {
+        position: [0.5, 0.5, 0.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, 1.0],
+    },
+];
+
+#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+#[repr(C)]
+struct Vertex {
+    position: [f32; 3],
+}
+
+fn new_render_pipeline(
     shader: wgpu::ShaderModule,
+    vertex_buffer_layout: wgpu::VertexBufferLayout,
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
 ) -> wgpu::RenderPipeline {
@@ -26,7 +54,7 @@ fn new_render_pipeline_with_shader(
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[],
+            buffers: &[vertex_buffer_layout],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -42,7 +70,7 @@ fn new_render_pipeline_with_shader(
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
-            cull_mode: Some(wgpu::Face::Back),
+            cull_mode: Some(wgpu::Face::Front),
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
@@ -65,6 +93,7 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
     window: Arc<Window>,
 }
 
@@ -112,7 +141,23 @@ impl State {
         };
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let render_pipeline = new_render_pipeline_with_shader(shader, &device, &config);
+        let vertex_buffer_layout = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x3,
+                offset: 0,
+                shader_location: 0,
+            }],
+        };
+
+        let render_pipeline = new_render_pipeline(shader, vertex_buffer_layout, &device, &config);
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTEX_DATA),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
 
         Ok(Self {
             surface,
@@ -121,6 +166,7 @@ impl State {
             config,
             is_surface_configured: false,
             render_pipeline,
+            vertex_buffer,
             window,
         })
     }
@@ -169,7 +215,8 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..6, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
